@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestNumericDate(t *testing.T) {
@@ -28,7 +28,7 @@ func TestNumericDate(t *testing.T) {
 	b, _ := json.Marshal(s)
 
 	if raw != string(b) {
-		t.Errorf("Serialized format of numeric date mismatch. Expecting: %s  Got: %s", string(raw), string(b))
+		t.Errorf("Serialized format of numeric date mismatch. Expecting: %s  Got: %s", raw, string(b))
 	}
 
 	jwt.TimePrecision = oldPrecision
@@ -41,13 +41,12 @@ func TestSingleArrayMarshal(t *testing.T) {
 	expected := `"test"`
 
 	b, err := json.Marshal(s)
-
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
 
 	if expected != string(b) {
-		t.Errorf("Serialized format of string array mismatch. Expecting: %s  Got: %s", string(expected), string(b))
+		t.Errorf("Serialized format of string array mismatch. Expecting: %s  Got: %s", expected, string(b))
 	}
 
 	jwt.MarshalSingleStringAsArray = true
@@ -61,7 +60,7 @@ func TestSingleArrayMarshal(t *testing.T) {
 	}
 
 	if expected != string(b) {
-		t.Errorf("Serialized format of string array mismatch. Expecting: %s  Got: %s", string(expected), string(b))
+		t.Errorf("Serialized format of string array mismatch. Expecting: %s  Got: %s", expected, string(b))
 	}
 }
 

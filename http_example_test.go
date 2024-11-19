@@ -4,7 +4,6 @@ package jwt_test
 // This is based on a (now outdated) example at https://gist.github.com/cryptix/45c33ecf0ae54828e63b
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"fmt"
 	"io"
@@ -16,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/golang-jwt/jwt/v4/request"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v5/request"
 )
 
 // location of the files used for signing and verification
@@ -73,7 +72,7 @@ type CustomerInfo struct {
 }
 
 type CustomClaimsExample struct {
-	*jwt.RegisteredClaims
+	jwt.RegisteredClaims
 	TokenType string
 	CustomerInfo
 }
@@ -84,19 +83,17 @@ func Example_getTokenViaHTTP() {
 		"user": {"test"},
 		"pass": {"known"},
 	})
-	if err != nil {
-		fatal(err)
-	}
+	fatal(err)
 
 	if res.StatusCode != 200 {
 		fmt.Println("Unexpected status code", res.StatusCode)
 	}
 
 	// Read the token out of the response body
-	buf := new(bytes.Buffer)
-	io.Copy(buf, res.Body)
+	buf, err := io.ReadAll(res.Body)
+	fatal(err)
 	res.Body.Close()
-	tokenString := strings.TrimSpace(buf.String())
+	tokenString := strings.TrimSpace(string(buf))
 
 	// Parse the token
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaimsExample{}, func(token *jwt.Token) (interface{}, error) {
@@ -109,11 +106,10 @@ func Example_getTokenViaHTTP() {
 	claims := token.Claims.(*CustomClaimsExample)
 	fmt.Println(claims.CustomerInfo.Name)
 
-	//Output: test
+	// Output: test
 }
 
 func Example_useTokenViaHTTP() {
-
 	// Make a sample token
 	// In a real world situation, this token will have been acquired from
 	// some other API call (see Example_getTokenViaHTTP)
@@ -128,10 +124,10 @@ func Example_useTokenViaHTTP() {
 	fatal(err)
 
 	// Read the response body
-	buf := new(bytes.Buffer)
-	io.Copy(buf, res.Body)
+	buf, err := io.ReadAll(res.Body)
+	fatal(err)
 	res.Body.Close()
-	fmt.Println(buf.String())
+	fmt.Printf("%s", buf)
 
 	// Output: Welcome, foo
 }
@@ -142,7 +138,7 @@ func createToken(user string) (string, error) {
 
 	// set our claims
 	t.Claims = &CustomClaimsExample{
-		&jwt.RegisteredClaims{
+		jwt.RegisteredClaims{
 			// set the expire time
 			// see https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 1)),
