@@ -3,7 +3,7 @@ package jwt_test
 import (
 	"testing"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestToken_SigningString(t1 *testing.T) {
@@ -12,7 +12,7 @@ func TestToken_SigningString(t1 *testing.T) {
 		Method    jwt.SigningMethod
 		Header    map[string]interface{}
 		Claims    jwt.Claims
-		Signature string
+		Signature []byte
 		Valid     bool
 	}
 	tests := []struct {
@@ -30,9 +30,8 @@ func TestToken_SigningString(t1 *testing.T) {
 					"typ": "JWT",
 					"alg": jwt.SigningMethodHS256.Alg(),
 				},
-				Claims:    jwt.StandardClaims{},
-				Signature: "",
-				Valid:     false,
+				Claims: jwt.RegisteredClaims{},
+				Valid:  false,
 			},
 			want:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30",
 			wantErr: false,
@@ -67,13 +66,13 @@ func BenchmarkToken_SigningString(b *testing.B) {
 			"typ": "JWT",
 			"alg": jwt.SigningMethodHS256.Alg(),
 		},
-		Claims: jwt.StandardClaims{},
+		Claims: jwt.RegisteredClaims{},
 	}
 	b.Run("BenchmarkToken_SigningString", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			t.SigningString()
+			_, _ = t.SigningString()
 		}
 	})
 }

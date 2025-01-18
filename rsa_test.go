@@ -1,11 +1,17 @@
 package jwt_test
 
 import (
+	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var rsaTestData = []struct {
@@ -48,7 +54,7 @@ func TestRSAVerify(t *testing.T) {
 		parts := strings.Split(data.tokenString, ".")
 
 		method := jwt.GetSigningMethod(data.alg)
-		err := method.Verify(strings.Join(parts[0:2], "."), parts[2], key)
+		err := method.Verify(strings.Join(parts[0:2], "."), decodeSegment(t, parts[2]), key)
 		if data.valid && err != nil {
 			t.Errorf("[%v] Error while verifying key: %v", data.name, err)
 		}
@@ -70,7 +76,7 @@ func TestRSASign(t *testing.T) {
 			if err != nil {
 				t.Errorf("[%v] Error signing token: %v", data.name, err)
 			}
-			if sig != parts[2] {
+			if !reflect.DeepEqual(sig, decodeSegment(t, parts[2])) {
 				t.Errorf("[%v] Incorrect signature.\nwas:\n%v\nexpecting:\n%v", data.name, sig, parts[2])
 			}
 		}
@@ -85,7 +91,7 @@ func TestRSAVerifyWithPreParsedPrivateKey(t *testing.T) {
 	}
 	testData := rsaTestData[0]
 	parts := strings.Split(testData.tokenString, ".")
-	err = jwt.SigningMethodRS256.Verify(strings.Join(parts[0:2], "."), parts[2], parsedKey)
+	err = jwt.SigningMethodRS256.Verify(strings.Join(parts[0:2], "."), decodeSegment(t, parts[2]), parsedKey)
 	if err != nil {
 		t.Errorf("[%v] Error while verifying key: %v", testData.name, err)
 	}
@@ -103,7 +109,7 @@ func TestRSAWithPreParsedPrivateKey(t *testing.T) {
 	if err != nil {
 		t.Errorf("[%v] Error signing token: %v", testData.name, err)
 	}
-	if sig != parts[2] {
+	if !reflect.DeepEqual(sig, decodeSegment(t, parts[2])) {
 		t.Errorf("[%v] Incorrect signature.\nwas:\n%v\nexpecting:\n%v", testData.name, sig, parts[2])
 	}
 }
@@ -113,6 +119,17 @@ func TestRSAKeyParsing(t *testing.T) {
 	secureKey, _ := os.ReadFile("test/privateSecure.pem")
 	pubKey, _ := os.ReadFile("test/sample_key.pub")
 	badKey := []byte("All your base are belong to key")
+
+	randomKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Errorf("Failed to generate RSA private key: %v", err)
+	}
+
+	publicKeyBytes := x509.MarshalPKCS1PublicKey(&randomKey.PublicKey)
+	pkcs1Buffer := new(bytes.Buffer)
+	if err = pem.Encode(pkcs1Buffer, &pem.Block{Type: "RSA PUBLIC KEY", Bytes: publicKeyBytes}); err != nil {
+		t.Errorf("Failed to encode public pem: %v", err)
+	}
 
 	// Test parsePrivateKey
 	if _, e := jwt.ParseRSAPrivateKeyFromPEM(key); e != nil {
@@ -148,6 +165,9 @@ func TestRSAKeyParsing(t *testing.T) {
 		t.Errorf("Parsed invalid key as valid private key: %v", k)
 	}
 
+	if _, err := jwt.ParseRSAPublicKeyFromPEM(pkcs1Buffer.Bytes()); err != nil {
+		t.Errorf("failed to parse RSA public key: %v", err)
+	}
 }
 
 func BenchmarkRSAParsing(b *testing.B) {

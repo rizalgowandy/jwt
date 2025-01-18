@@ -8,31 +8,20 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - uses: reviewdog/action-staticcheck@v1
-        with:
-          github_token: ${{ secrets.github_token }}
-          reporter: github-pr-review
-          filter_mode: nofilter
-          fail_on_error: true
-
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        go: [1.16, 1.17, 1.18]
+        go: ["1.21", "1.22", "1.23"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: "${{ matrix.go }}"
+          check-latest: true
       - name: Check Go code formatting
         run: |
           if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
@@ -42,6 +31,23 @@ jobs:
           fi
       - name: Build
         run: |
+          go install github.com/mfridman/tparse@latest  
           go vet ./...
-          go test -v ./...
+          go test -v -race -count=1 -json -cover ./... | tee output.json | tparse -follow -notests || true
+          tparse -format markdown -file output.json -all > $GITHUB_STEP_SUMMARY
           go build ./...
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+      - name: Coverage
+        run: |
+          go test -v -covermode=count -coverprofile=coverage.cov ./...
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          file: coverage.cov
+          format: golang

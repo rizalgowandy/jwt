@@ -1,10 +1,11 @@
 package jwt_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var noneTestData = []struct {
@@ -46,7 +47,7 @@ func TestNoneVerify(t *testing.T) {
 		parts := strings.Split(data.tokenString, ".")
 
 		method := jwt.GetSigningMethod(data.alg)
-		err := method.Verify(strings.Join(parts[0:2], "."), parts[2], data.key)
+		err := method.Verify(strings.Join(parts[0:2], "."), decodeSegment(t, parts[2]), data.key)
 		if data.valid && err != nil {
 			t.Errorf("[%v] Error while verifying key: %v", data.name, err)
 		}
@@ -58,16 +59,17 @@ func TestNoneVerify(t *testing.T) {
 
 func TestNoneSign(t *testing.T) {
 	for _, data := range noneTestData {
-		if data.valid {
-			parts := strings.Split(data.tokenString, ".")
-			method := jwt.GetSigningMethod(data.alg)
-			sig, err := method.Sign(strings.Join(parts[0:2], "."), data.key)
-			if err != nil {
-				t.Errorf("[%v] Error signing token: %v", data.name, err)
-			}
-			if sig != parts[2] {
-				t.Errorf("[%v] Incorrect signature.\nwas:\n%v\nexpecting:\n%v", data.name, sig, parts[2])
-			}
+		if !data.valid {
+			continue
+		}
+		parts := strings.Split(data.tokenString, ".")
+		method := jwt.GetSigningMethod(data.alg)
+		sig, err := method.Sign(strings.Join(parts[0:2], "."), data.key)
+		if err != nil {
+			t.Errorf("[%v] Error signing token: %v", data.name, err)
+		}
+		if !reflect.DeepEqual(sig, decodeSegment(t, parts[2])) {
+			t.Errorf("[%v] Incorrect signature.\nwas:\n%v\nexpecting:\n%v", data.name, sig, parts[2])
 		}
 	}
 }

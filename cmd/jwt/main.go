@@ -3,7 +3,8 @@
 //
 // Example usage:
 // The following will create and sign a token, then verify it and output the original claims.
-//     echo {\"foo\":\"bar\"} | bin/jwt -key test/sample_key -alg RS256 -sign - | bin/jwt -key test/sample_key.pub -verify -
+//
+//	echo {\"foo\":\"bar\"} | bin/jwt -key test/sample_key -alg RS256 -sign - | bin/jwt -key test/sample_key.pub -verify -
 package main
 
 import (
@@ -16,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -29,9 +30,9 @@ var (
 	flagHead    = make(ArgList)
 
 	// Modes - exactly one of these is required
-	flagSign   = flag.String("sign", "", "path to claims object to sign, '-' to read from stdin, or '+' to use only -claim args")
-	flagVerify = flag.String("verify", "", "path to JWT token to verify or '-' to read from stdin")
-	flagShow   = flag.String("show", "", "path to JWT file or '-' to read from stdin")
+	flagSign   = flag.String("sign", "", "path to claims file to sign, '-' to read from stdin, or '+' to use only -claim args")
+	flagVerify = flag.String("verify", "", "path to JWT token file to verify or '-' to read from stdin")
+	flagShow   = flag.String("show", "", "path to JWT token file to show without verification or '-' to read from stdin")
 )
 
 func main() {
@@ -42,7 +43,7 @@ func main() {
 	// Usage message if you ask for -help or if you mess up inputs.
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  One of the following flags is required: sign, verify\n")
+		fmt.Fprintf(os.Stderr, "  One of the following flags is required: sign, verify or show\n")
 		flag.PrintDefaults()
 	}
 
@@ -59,15 +60,16 @@ func main() {
 
 // Figure out which thing to do and then do that
 func start() error {
-	if *flagSign != "" {
+	switch {
+	case *flagSign != "":
 		return signToken()
-	} else if *flagVerify != "" {
+	case *flagVerify != "":
 		return verifyToken()
-	} else if *flagShow != "" {
+	case *flagShow != "":
 		return showToken()
-	} else {
+	default:
 		flag.Usage()
-		return fmt.Errorf("none of the required flags are present.  What do you want me to do?")
+		return fmt.Errorf("none of the required flags are present. What do you want me to do?")
 	}
 }
 
@@ -78,17 +80,18 @@ func loadData(p string) ([]byte, error) {
 	}
 
 	var rdr io.Reader
-	if p == "-" {
+	switch p {
+	case "-":
 		rdr = os.Stdin
-	} else if p == "+" {
+	case "+":
 		return []byte("{}"), nil
-	} else {
-		if f, err := os.Open(p); err == nil {
-			rdr = f
-			defer f.Close()
-		} else {
+	default:
+		f, err := os.Open(p)
+		if err != nil {
 			return nil, err
 		}
+		rdr = f
+		defer f.Close()
 	}
 	return io.ReadAll(rdr)
 }
@@ -135,30 +138,27 @@ func verifyToken() error {
 		if err != nil {
 			return nil, err
 		}
-		if isEs() {
+		switch {
+		case isEs():
 			return jwt.ParseECPublicKeyFromPEM(data)
-		} else if isRs() {
+		case isRs():
 			return jwt.ParseRSAPublicKeyFromPEM(data)
-		} else if isEd() {
+		case isEd():
 			return jwt.ParseEdPublicKeyFromPEM(data)
+		default:
+			return data, nil
 		}
-		return data, nil
 	})
-
-	// Print some debug data
-	if *flagDebug && token != nil {
-		fmt.Fprintf(os.Stderr, "Header:\n%v\n", token.Header)
-		fmt.Fprintf(os.Stderr, "Claims:\n%v\n", token.Claims)
-	}
 
 	// Print an error if we can't parse for some reason
 	if err != nil {
 		return fmt.Errorf("couldn't parse token: %w", err)
 	}
 
-	// Is token invalid?
-	if !token.Valid {
-		return fmt.Errorf("token is invalid")
+	// Print some debug data
+	if *flagDebug {
+		fmt.Fprintf(os.Stderr, "Header:\n%v\n", token.Header)
+		fmt.Fprintf(os.Stderr, "Claims:\n%v\n", token.Claims)
 	}
 
 	// Print the token details
@@ -220,40 +220,41 @@ func signToken() error {
 		}
 	}
 
-	if isEs() {
-		if k, ok := key.([]byte); !ok {
+	switch {
+	case isEs():
+		k, ok := key.([]byte)
+		if !ok {
 			return fmt.Errorf("couldn't convert key data to key")
-		} else {
-			key, err = jwt.ParseECPrivateKeyFromPEM(k)
-			if err != nil {
-				return err
-			}
 		}
-	} else if isRs() {
-		if k, ok := key.([]byte); !ok {
-			return fmt.Errorf("couldn't convert key data to key")
-		} else {
-			key, err = jwt.ParseRSAPrivateKeyFromPEM(k)
-			if err != nil {
-				return err
-			}
+		key, err = jwt.ParseECPrivateKeyFromPEM(k)
+		if err != nil {
+			return err
 		}
-	} else if isEd() {
-		if k, ok := key.([]byte); !ok {
+	case isRs():
+		k, ok := key.([]byte)
+		if !ok {
 			return fmt.Errorf("couldn't convert key data to key")
-		} else {
-			key, err = jwt.ParseEdPrivateKeyFromPEM(k)
-			if err != nil {
-				return err
-			}
+		}
+		key, err = jwt.ParseRSAPrivateKeyFromPEM(k)
+		if err != nil {
+			return err
+		}
+	case isEd():
+		k, ok := key.([]byte)
+		if !ok {
+			return fmt.Errorf("couldn't convert key data to key")
+		}
+		key, err = jwt.ParseEdPrivateKeyFromPEM(k)
+		if err != nil {
+			return err
 		}
 	}
 
-	if out, err := token.SignedString(key); err == nil {
-		fmt.Println(out)
-	} else {
+	out, err := token.SignedString(key)
+	if err != nil {
 		return fmt.Errorf("error signing token: %w", err)
 	}
+	fmt.Println(out)
 
 	return nil
 }
@@ -272,8 +273,8 @@ func showToken() error {
 		fmt.Fprintf(os.Stderr, "Token len: %v bytes\n", len(tokData))
 	}
 
-	token, err := jwt.Parse(string(tokData), nil)
-	if token == nil {
+	token, _, err := jwt.NewParser().ParseUnverified(string(tokData), make(jwt.MapClaims))
+	if err != nil {
 		return fmt.Errorf("malformed token: %w", err)
 	}
 
